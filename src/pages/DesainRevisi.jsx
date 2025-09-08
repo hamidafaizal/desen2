@@ -3,11 +3,11 @@ import { supabase } from '../supabaseClient';
 import { FiSearch, FiDownload, FiUpload, FiTrash, FiChevronLeft, FiChevronRight, FiFile, FiCopy, FiCheck } from 'react-icons/fi';
 
 // Komponen untuk menampilkan media (gambar/video) dalam slider
-function MediaSlider({ files }) {
+function MediaSlider({ files, canDownload = true }) {
   const [currentIndex, setCurrentIndex] = useState(0);
 
   if (!files || files.length === 0) {
-    return <div className="w-24 h-24 flex items-center justify-center bg-gray-800 rounded-md text-gray-500 text-xs">No File</div>;
+    return <div className="w-24 h-24 flex items-center justify-center bg-gray-800 rounded-md text-gray-500 text-xs text-center">Tidak Ada File</div>;
   }
 
   const goToPrevious = (e) => {
@@ -24,7 +24,6 @@ function MediaSlider({ files }) {
     setCurrentIndex(newIndex);
   };
 
-  // Helper untuk merender media berdasarkan ekstensi file
   const renderMedia = (url) => {
     const fileExtension = url.split('.').pop().toLowerCase().split('?')[0];
     const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'];
@@ -41,25 +40,24 @@ function MediaSlider({ files }) {
 
   return (
     <div className="relative w-24 h-24 group rounded-md overflow-hidden">
-      {/* Konten Media */}
       <div className="w-full h-full">
         {renderMedia(files[currentIndex])}
       </div>
 
-      {/* Tombol Download Overlay */}
-      <a
-        href={files[currentIndex]}
-        download
-        target="_blank"
-        rel="noopener noreferrer"
-        onClick={(e) => e.stopPropagation()}
-        className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-        aria-label="Download file"
-      >
-        <FiDownload size={24} className="text-white" />
-      </a>
+      {canDownload && (
+        <a
+          href={files[currentIndex]}
+          download
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+          aria-label="Download file"
+        >
+          <FiDownload size={24} className="text-white" />
+        </a>
+      )}
 
-      {/* Kontrol Slider */}
       {files.length > 1 && (
         <>
           <button
@@ -94,16 +92,19 @@ function BriefingCell({ text }) {
     const words = text.split(/\s+/);
     let lines = [];
     let currentLine = [];
+    let currentWordCount = 0;
 
-    words.forEach(word => {
-      currentLine.push(word);
-      if (currentLine.length === 7) {
-        lines.push(currentLine.join(' '));
-        currentLine = [];
-      }
-    });
+    for (const word of words) {
+        currentLine.push(word);
+        currentWordCount++;
+        if (currentWordCount >= 5) {
+            lines.push(currentLine.join(' '));
+            currentLine = [];
+            currentWordCount = 0;
+        }
+    }
     if (currentLine.length > 0) {
-      lines.push(currentLine.join(' '));
+        lines.push(currentLine.join(' '));
     }
 
     const needsTruncation = lines.length > 4;
@@ -154,16 +155,24 @@ function DesainRevisi() {
   const [error, setError] = useState('');
   const [editingId, setEditingId] = useState(null); // State untuk melacak ID baris yang diedit
   const [editingText, setEditingText] = useState(''); // State untuk menyimpan teks yang diedit
+  const [searchTerm, setSearchTerm] = useState(''); // State baru untuk search
 
   // Fungsi untuk mengambil data dari Supabase
-  const getDesains = async () => {
+  const getDesains = async (searchQuery) => {
     console.log("Fetching revision designs from Supabase...");
     setLoading(true);
-    const { data, error } = await supabase
+    let query = supabase
       .from('desains')
       .select('*')
       .eq('status', 'revisi') // Filter status hanya untuk 'revisi'
       .order('created_at', { ascending: true }); // Urutkan dari yang terdahulu
+
+    // Menambahkan filter pencarian jika ada searchTerm
+    if (searchQuery) {
+      query = query.ilike('nama_client', `%${searchQuery}%`);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.error("Error fetching designs:", error.message);
@@ -179,23 +188,29 @@ function DesainRevisi() {
 
   // Panggil fungsi getDesains saat komponen dimuat dan setup realtime listener
   useEffect(() => {
-    getDesains();
+    console.log(`Search term updated: ${searchTerm}. Debouncing fetch...`);
+    const delayDebounceFn = setTimeout(() => {
+      getDesains(searchTerm);
+    }, 500); // Debounce 500ms
 
     const channel = supabase.channel('desains-revisi-updates')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'desains' }, payload => {
-        console.log('Realtime update received!', payload);
-        getDesains();
+        console.log('Realtime update received on revision designs!', payload);
+        getDesains(searchTerm);
       })
       .subscribe();
 
     return () => {
+      clearTimeout(delayDebounceFn);
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [searchTerm]);
 
   // Fungsi untuk menandai briefing telah dilihat
   const handleBriefingDilihat = async (id) => {
     console.log(`Marking briefing as seen for id: ${id}`);
+    
+    // Optimistic UI update
     setDesains(currentDesains => 
       currentDesains.map(d => 
         d.id === id ? { ...d, briefing_dilihat: true } : d
@@ -210,7 +225,8 @@ function DesainRevisi() {
     if (error) {
       console.error("Error updating briefing_dilihat:", error.message);
       setError('Gagal menandai briefing.');
-      getDesains();
+      // Revert UI on error
+      getDesains(searchTerm);
     } else {
       console.log("Briefing marked as seen successfully.");
     }
@@ -218,22 +234,24 @@ function DesainRevisi() {
   
   // Fungsi untuk memulai mode edit
   const handleEditClick = (desain) => {
+    console.log("Starting edit mode for briefing.");
     setEditingId(desain.id);
     setEditingText(desain.briefing);
   };
 
   // Fungsi untuk membatalkan edit
   const handleCancelClick = () => {
+    console.log("Cancelling edit mode.");
     setEditingId(null);
     setEditingText('');
   };
 
   // Fungsi untuk menyimpan perubahan briefing
   const handleSaveClick = async (id) => {
-    // Data yang akan diupdate
+    console.log(`Saving briefing for id: ${id}`);
     const updatedData = { 
       briefing: editingText, 
-      briefing_dilihat: false // Set menjadi false untuk memicu indikator
+      briefing_dilihat: false 
     };
 
     const { error } = await supabase
@@ -246,7 +264,7 @@ function DesainRevisi() {
       setError('Gagal memperbarui briefing.');
     } else {
       console.log("Briefing updated successfully, briefing_dilihat set to false.");
-      // Perbarui state lokal dengan data baru
+      // Update state lokal
       setDesains(currentDesains =>
         currentDesains.map(d =>
           d.id === id ? { ...d, ...updatedData } : d
@@ -257,7 +275,6 @@ function DesainRevisi() {
     setEditingId(null);
     setEditingText('');
   };
-
 
   // Fungsi untuk menangani perubahan status
   const handleStatusChange = async (id, newStatus) => {
@@ -397,6 +414,8 @@ function DesainRevisi() {
           <input
             type="text"
             placeholder="Cari client..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-10 pr-4 py-2 bg-gray-700/50 rounded-lg border border-transparent focus:border-white/20 focus:outline-none"
           />
           <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -414,7 +433,6 @@ function DesainRevisi() {
                 <th className="p-4">Briefing</th>
                 <th className="p-4">Reverensi</th>
                 <th className="p-4">Hasil Desain</th>
-                <th className="p-4">Status</th>
               </tr>
             </thead>
             <tbody>
@@ -426,7 +444,11 @@ function DesainRevisi() {
                     <tr 
                       key={desain.id} 
                       className={`border-b border-white/10 hover:bg-white/5 transition-colors duration-300 ${rowClassName}`}
-                      onClick={() => !desain.briefing_dilihat && editingId !== desain.id && handleBriefingDilihat(desain.id)}
+                      onClick={() => {
+                        if (!desain.briefing_dilihat) {
+                           handleBriefingDilihat(desain.id);
+                        }
+                      }}
                     >
                       <td className="p-4 align-middle text-center">{index + 1}</td>
                       <td className="p-4 align-middle text-center">
@@ -465,49 +487,45 @@ function DesainRevisi() {
                       <td className="p-4 align-middle">
                         <MediaSlider files={desain.files} />
                       </td>
-                      <td className="p-4 align-top">
+                      <td className="p-4 align-middle">
                         <div className="flex flex-col space-y-2">
-                          {desain.hasil_desain && desain.hasil_desain.map((fileUrl, fileIndex) => (
-                            <div key={fileIndex} className="flex items-center justify-between group">
-                              <a href={fileUrl} target="_blank" rel="noopener noreferrer" download className="flex items-center space-x-2 text-green-400 hover:underline">
-                                <FiDownload size={16} />
-                                <span>{getFileNameFromUrl(fileUrl)}</span>
-                              </a>
+                          <div className="flex justify-center">
+                            <MediaSlider files={desain.hasil_desain} canDownload={false} />
+                          </div>
+                          {desain.hasil_desain && desain.hasil_desain.length > 0 && (
+                            <div className="flex justify-center space-x-2">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleDeleteHasilDesain(desain.id, fileUrl);
+                                  // Asumsi hanya ada satu file hasil desain yang bisa dihapus di halaman ini
+                                  handleDeleteHasilDesain(desain.id, desain.hasil_desain[0]);
                                 }}
-                                className="ml-2 text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                className="p-2 rounded-full text-red-500 hover:bg-red-900/50 transition-colors"
+                                aria-label="Hapus file"
                               >
-                                <FiTrash size={14} />
+                                <FiTrash size={16} />
                               </button>
+                              <label className="p-2 rounded-full text-gray-400 hover:bg-white/10 cursor-pointer transition-colors" aria-label="Unggah file">
+                                <FiUpload size={16} />
+                                <input type="file" className="hidden" onChange={(e) => handleUploadHasilDesain(e, desain.id)} />
+                              </label>
                             </div>
-                          ))}
-                          <label className="flex items-center space-x-2 text-gray-400 hover:text-white cursor-pointer">
-                            <FiUpload size={16} />
-                            <span>Upload File</span>
-                            <input type="file" className="hidden" onChange={(e) => handleUploadHasilDesain(e, desain.id)} />
-                          </label>
+                          )}
+                          {(!desain.hasil_desain || desain.hasil_desain.length === 0) && (
+                            <label className="flex items-center space-x-2 text-gray-400 hover:text-white cursor-pointer mt-2 justify-center">
+                              <FiUpload size={16} />
+                              <span>Upload File</span>
+                              <input type="file" className="hidden" onChange={(e) => handleUploadHasilDesain(e, desain.id)} />
+                            </label>
+                          )}
                         </div>
-                      </td>
-                      <td className="p-4 align-middle">
-                        <select
-                          value={desain.status}
-                          onChange={(e) => handleStatusChange(desain.id, e.target.value)}
-                          className="bg-gray-700/50 rounded-lg p-2 border border-transparent focus:border-white/20 focus:outline-none"
-                        >
-                          <option value="revisi">revisi</option>
-                          <option value="proses">proses</option>
-                          <option value="selesai">selesai</option>
-                        </select>
                       </td>
                     </tr>
                   )
                 })
               ) : (
                 <tr>
-                  <td colSpan="7" className="text-center p-8 text-gray-400">
+                  <td colSpan="6" className="text-center p-8 text-gray-400">
                     Tidak ada desain revisi.
                   </td>
                 </tr>
@@ -521,4 +539,3 @@ function DesainRevisi() {
 }
 
 export default DesainRevisi;
-

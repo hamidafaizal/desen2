@@ -1,22 +1,116 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../supabaseClient';
-import { FiSearch, FiDownload } from 'react-icons/fi';
+import { FiSearch, FiDownload, FiUpload, FiChevronLeft, FiChevronRight, FiFile, FiFolder, FiChevronDown, FiChevronUp } from 'react-icons/fi';
+
+// Komponen untuk menampilkan media (gambar/video) dalam slider
+function MediaSlider({ files, canDownload = true }) {
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  // Fungsi untuk mendapatkan nama file dari URL
+  const getFileNameFromUrl = (url) => {
+    try {
+      const urlObject = new URL(url);
+      const pathParts = urlObject.pathname.split('/');
+      return decodeURIComponent(pathParts[pathParts.length - 1]);
+    } catch (e) {
+      console.warn("Could not parse URL to get file name:", url);
+      return 'file';
+    }
+  };
+
+  if (!files || files.length === 0) {
+    return <div className="w-24 h-24 flex items-center justify-center bg-gray-800 rounded-md text-gray-500 text-xs text-center">Tidak Ada File</div>;
+  }
+
+  const goToPrevious = (e) => {
+    e.stopPropagation();
+    const isFirstSlide = currentIndex === 0;
+    const newIndex = isFirstSlide ? files.length - 1 : currentIndex - 1;
+    setCurrentIndex(newIndex);
+  };
+
+  const goToNext = (e) => {
+    e.stopPropagation();
+    const isLastSlide = currentIndex === files.length - 1;
+    const newIndex = isLastSlide ? 0 : currentIndex + 1;
+    setCurrentIndex(newIndex);
+  };
+
+  // Helper untuk merender media berdasarkan ekstensi file
+  const renderMedia = (url) => {
+    const fileExtension = url.split('.').pop().toLowerCase().split('?')[0];
+    const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'];
+    const videoExtensions = ['mp4', 'webm', 'ogg'];
+
+    if (imageExtensions.includes(fileExtension)) {
+      return <img src={url} alt={getFileNameFromUrl(url)} className="w-full h-full object-cover" />;
+    } else if (videoExtensions.includes(fileExtension)) {
+      return <video src={url} muted loop playsInline className="w-full h-full object-cover" />;
+    } else {
+      return <div className="w-full h-full flex items-center justify-center bg-gray-700"><FiFile className="text-gray-400" size={32} /></div>;
+    }
+  };
+
+  return (
+    <div className="relative w-24 h-24 group rounded-md overflow-hidden">
+      <div className="w-full h-full">
+        {renderMedia(files[currentIndex])}
+      </div>
+
+      {canDownload && (
+        <a
+          href={files[currentIndex]}
+          download
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+          aria-label="Download file"
+        >
+          <FiDownload size={24} className="text-white" />
+        </a>
+      )}
+
+      {files.length > 1 && (
+        <>
+          <button
+            onClick={goToPrevious}
+            className="absolute top-1/2 left-1 transform -translate-y-1/2 bg-black/40 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300 hover:bg-black/60"
+            aria-label="Previous file"
+          >
+            <FiChevronLeft size={16} />
+          </button>
+          <button
+            onClick={goToNext}
+            className="absolute top-1/2 right-1 transform -translate-y-1/2 bg-black/40 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300 hover:bg-black/60"
+            aria-label="Next file"
+          >
+            <FiChevronRight size={16} />
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
 
 // Halaman Desain Selesai
 function DesainSelesai() {
   const [desains, setDesains] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [openMonthFolders, setOpenMonthFolders] = useState({});
+  const [openDayFolders, setOpenDayFolders] = useState({});
 
   // Fungsi untuk mengambil data dari Supabase
   const getDesains = async () => {
-    console.log("Fetching completed designs from Supabase...");
+    console.log("Fetching all completed designs from Supabase...");
     setLoading(true);
     const { data, error } = await supabase
       .from('desains')
       .select('*')
-      .eq('status', 'selesai') // Filter status hanya untuk 'selesai'
-      .order('created_at', { ascending: false }); // Urutkan dari yang terbaru
+      .eq('status', 'selesai')
+      .order('tanggal_briefing', { ascending: false });
 
     if (error) {
       console.error("Error fetching designs:", error.message);
@@ -46,16 +140,113 @@ function DesainSelesai() {
     };
   }, []);
 
-  // Fungsi untuk mendapatkan nama file dari URL
-  const getFileNameFromUrl = (url) => {
-    try {
-      const urlObject = new URL(url);
-      const pathParts = urlObject.pathname.split('/');
-      return decodeURIComponent(pathParts[pathParts.length - 1]);
-    } catch (e) {
-      return 'file';
+  // Memproses data untuk pengelompokan folder
+  const groupedDesains = useMemo(() => {
+    if (!desains || desains.length === 0) return {};
+
+    const groups = {};
+
+    desains.forEach(desain => {
+      const date = new Date(desain.tanggal_briefing);
+      const year = date.getFullYear();
+      const month = date.toLocaleString('id-ID', { month: 'long' });
+      const day = date.getDate();
+      const monthYear = `${month} ${year}`;
+      const dayKey = `${day} ${month} ${year}`;
+
+      if (!groups[monthYear]) {
+        groups[monthYear] = {};
+      }
+      if (!groups[monthYear][dayKey]) {
+        groups[monthYear][dayKey] = [];
+      }
+
+      groups[monthYear][dayKey].push(desain);
+    });
+
+    return groups;
+  }, [desains]);
+
+  const handleToggleMonthFolder = (monthYear) => {
+    setOpenMonthFolders(prev => ({
+      ...prev,
+      [monthYear]: !prev[monthYear]
+    }));
+  };
+
+  const handleToggleDayFolder = (dayKey) => {
+    setOpenDayFolders(prev => ({
+      ...prev,
+      [dayKey]: !prev[dayKey]
+    }));
+  };
+
+  // Fungsi pencarian
+  const filteredDesains = useMemo(() => {
+    if (!searchTerm) {
+      return [];
+    }
+    const lowercasedTerm = searchTerm.toLowerCase();
+    return desains.filter(desain =>
+      desain.nama_client.toLowerCase().includes(lowercasedTerm)
+    );
+  }, [desains, searchTerm]);
+  
+  const handleUploadHasilDesain = async (e, desainId) => {
+    const file = e.target.files[0];
+    if (!file) {
+      console.log("No file selected.");
+      return;
+    }
+    
+    const fileName = `${desainId}/${Date.now()}-${file.name}`;
+    console.log(`Uploading file: ${fileName} to bucket 'hasil_desain'`);
+
+    const { error: uploadError } = await supabase.storage
+      .from('hasil_desain')
+      .upload(fileName, file);
+
+    if (uploadError) {
+      console.error('Error uploading file:', uploadError.message);
+      setError('Gagal mengunggah file.');
+      return;
+    }
+    
+    const { data: urlData } = supabase.storage
+      .from('hasil_desain')
+      .getPublicUrl(fileName);
+
+    const publicURL = urlData.publicUrl;
+    console.log(`Public URL: ${publicURL}`);
+
+    const { data: currentDesain, error: fetchError } = await supabase
+      .from('desains')
+      .select('hasil_desain')
+      .eq('id', desainId)
+      .single();
+
+    if (fetchError) {
+      console.error('Error fetching current design data:', fetchError.message);
+      setError('Gagal mengambil data desain saat ini.');
+      return;
+    }
+
+    const updatedHasilDesain = [...(currentDesain.hasil_desain || []), publicURL];
+
+    const { error: dbError } = await supabase
+      .from('desains')
+      .update({ hasil_desain: updatedHasilDesain })
+      .eq('id', desainId);
+
+    if (dbError) {
+      console.error('Error updating database:', dbError.message);
+      setError('Gagal memperbarui database dengan URL file.');
+    } else {
+      console.log("Database updated successfully.");
+      getDesains();
     }
   };
+
 
   return (
     <div className="space-y-6">
@@ -65,73 +256,131 @@ function DesainSelesai() {
           <input
             type="text"
             placeholder="Cari client..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-10 pr-4 py-2 bg-gray-700/50 rounded-lg border border-transparent focus:border-white/20 focus:outline-none"
           />
           <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
         </div>
       </div>
 
-      {loading ? <p>Loading...</p> : error ? <p className="text-red-400">{error}</p> : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="border-b border-white/10">
-                <th className="p-4">No</th>
-                <th className="p-4">Client</th>
-                <th className="p-4">Tanggal</th>
-                <th className="p-4">Briefing</th>
-                <th className="p-4">Files</th>
-                <th className="p-4">Hasil Desain</th>
-              </tr>
-            </thead>
-            <tbody>
-              {desains.length > 0 ? (
-                desains.map((desain, index) => (
-                  <tr 
-                    key={desain.id} 
-                    className="border-b border-white/10 hover:bg-white/5"
-                  >
-                    <td className="p-4 align-top">{index + 1}</td>
-                    <td className="p-4 align-top">
-                      <div className="font-semibold">{desain.nama_client}</div>
-                    </td>
-                    <td className="p-4 align-top">
-                      <div className="text-sm text-gray-400">{new Date(desain.tanggal_briefing).toLocaleDateString('id-ID')}</div>
-                    </td>
-                    <td className="p-4 align-top max-w-sm">
-                      <p className="text-sm text-gray-300 whitespace-pre-wrap">{desain.briefing}</p>
-                    </td>
-                    <td className="p-4 align-top">
-                      <div className="flex flex-col space-y-2">
-                        {desain.files && desain.files.map((fileUrl, fileIndex) => (
-                          <a key={fileIndex} href={fileUrl} target="_blank" rel="noopener noreferrer" download className="flex items-center space-x-2 text-indigo-400 hover:underline">
-                            <FiDownload size={16} />
-                            <span>{getFileNameFromUrl(fileUrl)}</span>
-                          </a>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="p-4 align-top">
-                      <div className="flex flex-col space-y-2">
-                        {desain.hasil_desain && desain.hasil_desain.map((fileUrl, fileIndex) => (
-                          <a key={fileIndex} href={fileUrl} target="_blank" rel="noopener noreferrer" download className="flex items-center space-x-2 text-green-400 hover:underline">
-                            <FiDownload size={16} />
-                            <span>{getFileNameFromUrl(fileUrl)}</span>
-                          </a>
-                        ))}
-                      </div>
-                    </td>
+      {loading ? (
+        <p>Loading...</p>
+      ) : error ? (
+        <p className="text-red-400">{error}</p>
+      ) : (
+        <div className="space-y-4">
+          {searchTerm ? (
+            // Tampilan daftar datar saat ada pencarian
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="border-b border-white/10">
+                    <th className="p-4 text-center">No</th>
+                    <th className="p-4 text-center">Client</th>
+                    <th className="p-4 text-center">Tanggal</th>
+                    <th className="p-4 text-center">Hasil Desain</th>
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan="6" className="text-center p-8 text-gray-400">
-                    Tidak ada desain yang selesai.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                </thead>
+                <tbody>
+                  {filteredDesains.length > 0 ? (
+                    filteredDesains.map((desain, index) => (
+                      <tr key={desain.id} className="border-b border-white/10 hover:bg-white/5 transition-colors duration-300">
+                        <td className="p-4 align-middle text-center">{index + 1}</td>
+                        <td className="p-4 align-middle text-center">
+                          <div className="font-semibold uppercase">{desain.nama_client}</div>
+                        </td>
+                        <td className="p-4 align-middle text-center">
+                          <div className="text-sm text-gray-400">{new Date(desain.tanggal_briefing).toLocaleDateString('id-ID')}</div>
+                        </td>
+                        <td className="p-4 align-middle text-center">
+                          <div className="flex flex-col items-center space-y-2">
+                            <MediaSlider files={desain.hasil_desain} canDownload={true} />
+                            <label className="flex items-center space-x-2 text-gray-400 hover:text-white cursor-pointer mt-2">
+                              <FiUpload size={16} />
+                              <span>Upload File</span>
+                              <input type="file" className="hidden" onChange={(e) => handleUploadHasilDesain(e, desain.id)} />
+                            </label>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="4" className="text-center p-8 text-gray-400">Tidak ada hasil yang ditemukan.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            // Tampilan folder saat tidak ada pencarian
+            Object.keys(groupedDesains).map(monthYear => (
+              <div key={monthYear} className="space-y-2">
+                <button
+                  onClick={() => handleToggleMonthFolder(monthYear)}
+                  className="flex items-center space-x-2 w-full text-left p-3 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors"
+                >
+                  <FiFolder />
+                  <span className="font-semibold">{monthYear}</span>
+                  {openMonthFolders[monthYear] ? <FiChevronUp /> : <FiChevronDown />}
+                </button>
+                {openMonthFolders[monthYear] && (
+                  <div className="ml-6 space-y-2">
+                    {Object.keys(groupedDesains[monthYear]).map((dayKey, index) => (
+                      <div key={dayKey} className="space-y-2">
+                        <button
+                          onClick={() => handleToggleDayFolder(dayKey)}
+                          className="flex items-center space-x-2 w-full text-left p-2 rounded-lg bg-gray-700/50 hover:bg-gray-700 transition-colors"
+                        >
+                          <FiFolder />
+                          <span className="text-sm font-medium">{dayKey}</span>
+                          {openDayFolders[dayKey] ? <FiChevronUp /> : <FiChevronDown />}
+                        </button>
+                        {openDayFolders[dayKey] && (
+                          <div className="ml-4 overflow-x-auto mt-2">
+                            <table className="w-full text-left">
+                              <thead>
+                                <tr className="border-b border-white/10">
+                                  <th className="p-4 text-center">No</th>
+                                  <th className="p-4 text-center">Client</th>
+                                  <th className="p-4 text-center">Tanggal</th>
+                                  <th className="p-4 text-center">Hasil Desain</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {groupedDesains[monthYear][dayKey].map((desain, desainIndex) => (
+                                  <tr key={desain.id} className="border-b border-white/10 hover:bg-white/5 transition-colors duration-300">
+                                    <td className="p-4 align-middle text-center">{desainIndex + 1}</td>
+                                    <td className="p-4 align-middle text-center">
+                                      <div className="font-semibold uppercase">{desain.nama_client}</div>
+                                    </td>
+                                    <td className="p-4 align-middle text-center">
+                                      <div className="text-sm text-gray-400">{new Date(desain.tanggal_briefing).toLocaleDateString('id-ID')}</div>
+                                    </td>
+                                    <td className="p-4 align-middle text-center">
+                                      <div className="flex flex-col items-center space-y-2">
+                                        <MediaSlider files={desain.hasil_desain} canDownload={true} />
+                                        <label className="flex items-center space-x-2 text-gray-400 hover:text-white cursor-pointer mt-2">
+                                          <FiUpload size={16} />
+                                          <span>Upload File</span>
+                                          <input type="file" className="hidden" onChange={(e) => handleUploadHasilDesain(e, desain.id)} />
+                                        </label>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))
+          )}
         </div>
       )}
     </div>
