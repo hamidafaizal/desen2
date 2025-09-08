@@ -4,7 +4,9 @@ import Sidebar from './components/Sidebar';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import ProtectedRoute from './components/ProtectedRoute';
-import DesainBaru from './pages/DesainBaru'; // Impor halaman baru
+import DesainBaru from './pages/DesainBaru';
+import DesainRevisi from './pages/DesainRevisi'; // Impor halaman revisi
+import DesainSelesai from './pages/DesainSelesai'; // Impor halaman selesai
 
 // Komponen Layout Utama untuk halaman yang dilindungi
 function DashboardLayout() {
@@ -47,6 +49,8 @@ function App() {
           <Route path="/" element={<Dashboard />} />
           {/* Tambahkan rute terproteksi lainnya di sini */}
           <Route path="/desain-baru" element={<DesainBaru />} />
+          <Route path="/desain-revisi" element={<DesainRevisi />} />
+          <Route path="/desain-selesai" element={<DesainSelesai />} />
         </Route>
       </Route>
     </Routes>
