@@ -6,10 +6,23 @@ import { FiSearch, FiDownload, FiUpload, FiTrash, FiChevronLeft, FiChevronRight,
 function MediaSlider({ files, canDownload = true }) {
   const [currentIndex, setCurrentIndex] = useState(0);
 
+  // fungsi untuk mendapatkan nama file dari URL
+  const getFileNameFromUrl = (url) => {
+    try {
+      const urlObject = new URL(url);
+      const pathParts = urlObject.pathname.split('/');
+      return decodeURIComponent(pathParts[pathParts.length - 1]);
+    } catch (e) {
+      console.warn("Could not parse URL to get file name:", url);
+      return 'file';
+    }
+  };
+
   if (!files || files.length === 0) {
     return <div className="w-24 h-24 flex items-center justify-center bg-gray-800 rounded-md text-gray-500 text-xs text-center">Tidak Ada File</div>;
   }
 
+  // fungsi untuk pindah ke media sebelumnya
   const goToPrevious = (e) => {
     e.stopPropagation();
     const isFirstSlide = currentIndex === 0;
@@ -17,6 +30,7 @@ function MediaSlider({ files, canDownload = true }) {
     setCurrentIndex(newIndex);
   };
 
+  // fungsi untuk pindah ke media berikutnya
   const goToNext = (e) => {
     e.stopPropagation();
     const isLastSlide = currentIndex === files.length - 1;
@@ -24,13 +38,14 @@ function MediaSlider({ files, canDownload = true }) {
     setCurrentIndex(newIndex);
   };
 
+  // helper untuk merender media berdasarkan ekstensi file
   const renderMedia = (url) => {
     const fileExtension = url.split('.').pop().toLowerCase().split('?')[0];
     const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'];
     const videoExtensions = ['mp4', 'webm', 'ogg'];
 
     if (imageExtensions.includes(fileExtension)) {
-      return <img src={url} alt="Referensi media" className="w-full h-full object-cover" />;
+      return <img src={url} alt={getFileNameFromUrl(url)} className="w-full h-full object-cover" />;
     } else if (videoExtensions.includes(fileExtension)) {
       return <video src={url} muted loop playsInline className="w-full h-full object-cover" />;
     } else {
@@ -85,7 +100,7 @@ function BriefingCell({ text }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  // Memproses teks untuk pembatasan kata dan baris
+  // memproses teks untuk pembatasan kata dan baris
   const { displayText, needsTruncation } = useMemo(() => {
     if (!text) return { displayText: '', needsTruncation: false };
 
@@ -114,12 +129,12 @@ function BriefingCell({ text }) {
     return { displayText, needsTruncation };
   }, [text, isExpanded]);
 
-  // Fungsi untuk menyalin teks ke clipboard
+  // fungsi untuk menyalin teks ke clipboard
   const handleCopy = (e) => {
     e.stopPropagation();
-    navigator.clipboard.writeText(text);
+    document.execCommand('copy', false, text);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000); // Reset status copy setelah 2 detik
+    setTimeout(() => setCopied(false), 2000); // reset status copy setelah 2 detik
   };
 
   return (
@@ -407,22 +422,22 @@ function DesainRevisi() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Desain Revisi</h1>
-        <div className="relative w-full max-w-xs">
-          <input
-            type="text"
-            placeholder="Cari client..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-gray-700/50 rounded-lg border border-transparent focus:border-white/20 focus:outline-none"
-          />
-          <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+    <div className="flex flex-col h-full space-y-6 bg-transparent">
+      {/* Header Halaman dan Judul Kolom yang Persisten */}
+      <div className="sticky top-0 z-10 p-6 glassmorphism rounded-xl">
+        <div className="flex justify-between items-center mb-4">
+          <h1 className="text-3xl font-bold">Desain Revisi</h1>
+          <div className="relative w-full max-w-xs">
+            <input
+              type="text"
+              placeholder="Cari client..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 bg-gray-700/50 rounded-lg border border-transparent focus:border-white/20 focus:outline-none"
+            />
+            <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          </div>
         </div>
-      </div>
-
-      {loading ? <p>Loading...</p> : error ? <p className="text-red-400">{error}</p> : (
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
@@ -430,13 +445,33 @@ function DesainRevisi() {
                 <th className="p-4 text-center">No</th>
                 <th className="p-4 text-center">Client</th>
                 <th className="p-4 text-center">Tanggal</th>
-                <th className="p-4">Briefing</th>
-                <th className="p-4">Reverensi</th>
-                <th className="p-4">Hasil Desain</th>
+                <th className="p-4 text-left">Briefing</th>
+                <th className="p-4 text-center">Reverensi</th>
+                <th className="p-4 text-center">Hasil Desain</th>
+                <th className="p-4 text-center">Status</th>
               </tr>
             </thead>
-            <tbody>
-              {desains.length > 0 ? (
+          </table>
+        </div>
+      </div>
+      
+      {/* Konten tabel yang dapat di-scroll */}
+      <div className="overflow-y-auto flex-1">
+        <table className="w-full text-left">
+          <tbody>
+            {loading ? (
+              <tr>
+                <td colSpan="7" className="text-center p-8 text-gray-400">
+                  Loading...
+                </td>
+              </tr>
+            ) : error ? (
+              <tr>
+                <td colSpan="7" className="text-center p-8 text-red-400">
+                  {error}
+                </td>
+              </tr>
+            ) : desains.length > 0 ? (
                 desains.map((desain, index) => {
                   const rowClassName = !desain.briefing_dilihat ? 'bg-green-500/20 cursor-pointer' : '';
 
@@ -458,7 +493,7 @@ function DesainRevisi() {
                         <div className="text-sm text-gray-400">{new Date(desain.tanggal_briefing).toLocaleDateString('id-ID')}</div>
                       </td>
                       <td 
-                        className="p-4 align-top max-w-sm"
+                        className="p-4 align-top max-w-sm text-left"
                         onDoubleClick={(e) => {
                           e.stopPropagation();
                           handleEditClick(desain);
@@ -484,20 +519,17 @@ function DesainRevisi() {
                           <BriefingCell text={desain.briefing} />
                         )}
                       </td>
-                      <td className="p-4 align-middle">
+                      <td className="p-4 align-middle text-center">
                         <MediaSlider files={desain.files} />
                       </td>
-                      <td className="p-4 align-middle">
-                        <div className="flex flex-col space-y-2">
-                          <div className="flex justify-center">
-                            <MediaSlider files={desain.hasil_desain} canDownload={false} />
-                          </div>
+                      <td className="p-4 align-middle text-center">
+                        <div className="flex flex-col items-center space-y-2">
+                          <MediaSlider files={desain.hasil_desain} canDownload={false} />
                           {desain.hasil_desain && desain.hasil_desain.length > 0 && (
                             <div className="flex justify-center space-x-2">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  // Asumsi hanya ada satu file hasil desain yang bisa dihapus di halaman ini
                                   handleDeleteHasilDesain(desain.id, desain.hasil_desain[0]);
                                 }}
                                 className="p-2 rounded-full text-red-500 hover:bg-red-900/50 transition-colors"
@@ -520,20 +552,30 @@ function DesainRevisi() {
                           )}
                         </div>
                       </td>
+                      <td className="p-4 align-middle text-center">
+                        <select
+                          value={desain.status}
+                          onChange={(e) => handleStatusChange(desain.id, e.target.value)}
+                          className="bg-gray-700/50 rounded-lg p-2 border border-transparent focus:border-white/20 focus:outline-none"
+                        >
+                          <option value="dalam antrian">dalam antrian</option>
+                          <option value="proses">proses</option>
+                          <option value="revisi">revisi</option>
+                        </select>
+                      </td>
                     </tr>
                   )
                 })
-              ) : (
-                <tr>
-                  <td colSpan="6" className="text-center p-8 text-gray-400">
-                    Tidak ada desain revisi.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
+            ) : (
+              <tr>
+                <td colSpan="7" className="text-center p-8 text-gray-400">
+                  Tidak ada desain revisi.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

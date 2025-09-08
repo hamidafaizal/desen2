@@ -10,17 +10,15 @@ import DesainSelesai from './pages/DesainSelesai'; // Impor halaman selesai
 
 // Komponen Layout Utama untuk halaman yang dilindungi
 function DashboardLayout() {
+  console.log("Rendering DashboardLayout...");
   return (
-    <div className="flex bg-gray-900 text-gray-200 min-h-screen">
-      <Sidebar />
-      <div className="flex-1 flex flex-col p-6 space-y-6">
-        <Header />
-        <main className="flex-1">
-          <div className="w-full h-full glassmorphism rounded-xl p-8">
-            <Outlet /> {/* Halaman spesifik akan dirender di sini */}
-          </div>
-        </main>
-      </div>
+    <div className="flex-1 flex flex-col p-6 space-y-6">
+      <Header />
+      <main className="flex-1 overflow-y-auto">
+        <div className="w-full h-full glassmorphism rounded-xl p-8">
+          <Outlet /> {/* Halaman spesifik akan dirender di sini */}
+        </div>
+      </main>
     </div>
   );
 }
@@ -37,25 +35,28 @@ function Dashboard() {
 
 // Komponen App Utama yang mengatur semua routing
 function App() {
+  console.log("Rendering App component...");
   return (
-    <Routes>
-      {/* Rute Publik */}
-      <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
+    <div className="flex bg-gray-900 text-gray-200 h-screen">
+      <Sidebar />
+      <Routes className="flex-1">
+        {/* Rute Publik */}
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
 
-      {/* Rute yang Dilindungi */}
-      <Route element={<ProtectedRoute />}>
-        <Route element={<DashboardLayout />}>
-          <Route path="/" element={<Dashboard />} />
-          {/* Tambahkan rute terproteksi lainnya di sini */}
-          <Route path="/desain-baru" element={<DesainBaru />} />
-          <Route path="/desain-revisi" element={<DesainRevisi />} />
-          <Route path="/desain-selesai" element={<DesainSelesai />} />
+        {/* Rute yang Dilindungi */}
+        <Route element={<ProtectedRoute />}>
+          <Route element={<DashboardLayout />}>
+            <Route path="/" element={<Dashboard />} />
+            {/* Tambahkan rute terproteksi lainnya di sini */}
+            <Route path="/desain-baru" element={<DesainBaru />} />
+            <Route path="/desain-revisi" element={<DesainRevisi />} />
+            <Route path="/desain-selesai" element={<DesainSelesai />} />
+          </Route>
         </Route>
-      </Route>
-    </Routes>
+      </Routes>
+    </div>
   );
 }
 
 export default App;
-

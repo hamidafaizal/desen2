@@ -22,6 +22,7 @@ function MediaSlider({ files, canDownload = true }) {
     return <div className="w-24 h-24 flex items-center justify-center bg-gray-800 rounded-md text-gray-500 text-xs text-center">Tidak Ada File</div>;
   }
 
+  // fungsi untuk pindah ke media sebelumnya
   const goToPrevious = (e) => {
     e.stopPropagation();
     const isFirstSlide = currentIndex === 0;
@@ -29,6 +30,7 @@ function MediaSlider({ files, canDownload = true }) {
     setCurrentIndex(newIndex);
   };
 
+  // fungsi untuk pindah ke media berikutnya
   const goToNext = (e) => {
     e.stopPropagation();
     const isLastSlide = currentIndex === files.length - 1;
@@ -247,142 +249,138 @@ function DesainSelesai() {
     }
   };
 
-
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Desain Selesai</h1>
-        <div className="relative w-full max-w-xs">
-          <input
-            type="text"
-            placeholder="Cari client..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-gray-700/50 rounded-lg border border-transparent focus:border-white/20 focus:outline-none"
-          />
-          <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+    <div className="flex flex-col h-full space-y-6 bg-transparent">
+      {/* Header Halaman dan Judul Kolom yang Persisten */}
+      <div className="sticky top-0 z-10 p-6 glassmorphism rounded-xl">
+        <div className="flex justify-between items-center mb-4">
+          <h1 className="text-3xl font-bold">Desain Selesai</h1>
+          <div className="relative w-full max-w-xs">
+            <input
+              type="text"
+              placeholder="Cari client..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 bg-gray-700/50 rounded-lg border border-transparent focus:border-white/20 focus:outline-none"
+            />
+            <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              {/* Menghapus judul kolom yang tidak perlu */}
+            </thead>
+          </table>
         </div>
       </div>
 
-      {loading ? (
-        <p>Loading...</p>
-      ) : error ? (
-        <p className="text-red-400">{error}</p>
-      ) : (
-        <div className="space-y-4">
-          {searchTerm ? (
-            // Tampilan daftar datar saat ada pencarian
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="border-b border-white/10">
-                    <th className="p-4 text-center">No</th>
-                    <th className="p-4 text-center">Client</th>
-                    <th className="p-4 text-center">Tanggal</th>
-                    <th className="p-4 text-center">Hasil Desain</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredDesains.length > 0 ? (
-                    filteredDesains.map((desain, index) => (
-                      <tr key={desain.id} className="border-b border-white/10 hover:bg-white/5 transition-colors duration-300">
-                        <td className="p-4 align-middle text-center">{index + 1}</td>
-                        <td className="p-4 align-middle text-center">
-                          <div className="font-semibold uppercase">{desain.nama_client}</div>
-                        </td>
-                        <td className="p-4 align-middle text-center">
-                          <div className="text-sm text-gray-400">{new Date(desain.tanggal_briefing).toLocaleDateString('id-ID')}</div>
-                        </td>
-                        <td className="p-4 align-middle text-center">
-                          <div className="flex flex-col items-center space-y-2">
-                            <MediaSlider files={desain.hasil_desain} canDownload={true} />
-                            <label className="flex items-center space-x-2 text-gray-400 hover:text-white cursor-pointer mt-2">
-                              <FiUpload size={16} />
-                              <span>Upload File</span>
-                              <input type="file" className="hidden" onChange={(e) => handleUploadHasilDesain(e, desain.id)} />
-                            </label>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan="4" className="text-center p-8 text-gray-400">Tidak ada hasil yang ditemukan.</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            // Tampilan folder saat tidak ada pencarian
-            Object.keys(groupedDesains).map(monthYear => (
-              <div key={monthYear} className="space-y-2">
-                <button
-                  onClick={() => handleToggleMonthFolder(monthYear)}
-                  className="flex items-center space-x-2 w-full text-left p-3 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors"
-                >
-                  <FiFolder />
-                  <span className="font-semibold">{monthYear}</span>
-                  {openMonthFolders[monthYear] ? <FiChevronUp /> : <FiChevronDown />}
-                </button>
-                {openMonthFolders[monthYear] && (
-                  <div className="ml-6 space-y-2">
-                    {Object.keys(groupedDesains[monthYear]).map((dayKey, index) => (
-                      <div key={dayKey} className="space-y-2">
-                        <button
-                          onClick={() => handleToggleDayFolder(dayKey)}
-                          className="flex items-center space-x-2 w-full text-left p-2 rounded-lg bg-gray-700/50 hover:bg-gray-700 transition-colors"
-                        >
-                          <FiFolder />
-                          <span className="text-sm font-medium">{dayKey}</span>
-                          {openDayFolders[dayKey] ? <FiChevronUp /> : <FiChevronDown />}
-                        </button>
-                        {openDayFolders[dayKey] && (
-                          <div className="ml-4 overflow-x-auto mt-2">
-                            <table className="w-full text-left">
-                              <thead>
-                                <tr className="border-b border-white/10">
-                                  <th className="p-4 text-center">No</th>
-                                  <th className="p-4 text-center">Client</th>
-                                  <th className="p-4 text-center">Tanggal</th>
-                                  <th className="p-4 text-center">Hasil Desain</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {groupedDesains[monthYear][dayKey].map((desain, desainIndex) => (
-                                  <tr key={desain.id} className="border-b border-white/10 hover:bg-white/5 transition-colors duration-300">
-                                    <td className="p-4 align-middle text-center">{desainIndex + 1}</td>
-                                    <td className="p-4 align-middle text-center">
-                                      <div className="font-semibold uppercase">{desain.nama_client}</div>
-                                    </td>
-                                    <td className="p-4 align-middle text-center">
-                                      <div className="text-sm text-gray-400">{new Date(desain.tanggal_briefing).toLocaleDateString('id-ID')}</div>
-                                    </td>
-                                    <td className="p-4 align-middle text-center">
-                                      <div className="flex flex-col items-center space-y-2">
-                                        <MediaSlider files={desain.hasil_desain} canDownload={true} />
-                                        <label className="flex items-center space-x-2 text-gray-400 hover:text-white cursor-pointer mt-2">
-                                          <FiUpload size={16} />
-                                          <span>Upload File</span>
-                                          <input type="file" className="hidden" onChange={(e) => handleUploadHasilDesain(e, desain.id)} />
-                                        </label>
-                                      </div>
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        )}
+      {/* Konten tabel yang dapat di-scroll */}
+      <div className="overflow-y-auto flex-1">
+        <table className="w-full text-left">
+          <tbody>
+            {loading ? (
+              <tr>
+                <td colSpan="5" className="text-center p-8 text-gray-400">
+                  Loading...
+                </td>
+              </tr>
+            ) : error ? (
+              <tr>
+                <td colSpan="5" className="text-center p-8 text-red-400">
+                  {error}
+                </td>
+              </tr>
+            ) : searchTerm ? (
+              // Tampilan daftar datar saat ada pencarian
+              filteredDesains.length > 0 ? (
+                filteredDesains.map((desain, index) => (
+                  <tr key={desain.id} className="border-b border-white/10 hover:bg-white/5 transition-colors duration-300">
+                    <td className="p-4 align-middle text-center">{index + 1}</td>
+                    <td className="p-4 align-middle text-center">
+                      <div className="font-semibold uppercase">{desain.nama_client}</div>
+                    </td>
+                    <td className="p-4 align-middle text-center">
+                      <div className="text-sm text-gray-400">{new Date(desain.tanggal_briefing).toLocaleDateString('id-ID')}</div>
+                    </td>
+                    <td className="p-4 align-middle text-center">
+                      <MediaSlider files={desain.files} />
+                    </td>
+                    <td className="p-4 align-middle text-center">
+                      <div className="flex flex-col items-center space-y-2">
+                        <MediaSlider files={desain.hasil_desain} canDownload={true} />
+                        <label className="flex items-center space-x-2 text-gray-400 hover:text-white cursor-pointer mt-2">
+                          <FiUpload size={16} />
+                          <span>Upload File</span>
+                          <input type="file" className="hidden" onChange={(e) => handleUploadHasilDesain(e, desain.id)} />
+                        </label>
                       </div>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="5" className="text-center p-8 text-gray-400">Tidak ada hasil yang ditemukan.</td>
+                </tr>
+              )
+            ) : (
+              // Tampilan folder saat tidak ada pencarian
+              Object.keys(groupedDesains).map(monthYear => (
+                <>
+                  <tr key={monthYear} onClick={() => handleToggleMonthFolder(monthYear)} className="cursor-pointer">
+                    <td colSpan="5" className="p-3 text-left">
+                      <div className="flex items-center space-x-2 w-full text-left p-3 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors">
+                        <FiFolder />
+                        <span className="font-semibold">{monthYear}</span>
+                        {openMonthFolders[monthYear] ? <FiChevronUp /> : <FiChevronDown />}
+                      </div>
+                    </td>
+                  </tr>
+                  {openMonthFolders[monthYear] &&
+                    Object.keys(groupedDesains[monthYear]).map(dayKey => (
+                      <>
+                        <tr key={dayKey} onClick={() => handleToggleDayFolder(dayKey)} className="cursor-pointer">
+                          <td colSpan="5" className="p-2 pl-12 text-left">
+                            <div className="flex items-center space-x-2 w-full text-left p-2 rounded-lg bg-gray-700/50 hover:bg-gray-700 transition-colors">
+                              <FiFolder />
+                              <span className="text-sm font-medium">{dayKey}</span>
+                              {openDayFolders[dayKey] ? <FiChevronUp /> : <FiChevronDown />}
+                            </div>
+                          </td>
+                        </tr>
+                        {openDayFolders[dayKey] &&
+                          groupedDesains[monthYear][dayKey].map((desain, desainIndex) => (
+                            <tr key={desain.id} className="border-b border-white/10 hover:bg-white/5 transition-colors duration-300">
+                              <td className="p-4 align-middle text-center">{desainIndex + 1}</td>
+                              <td className="p-4 align-middle text-center">
+                                <div className="font-semibold uppercase">{desain.nama_client}</div>
+                              </td>
+                              <td className="p-4 align-middle text-center">
+                                <div className="text-sm text-gray-400">{new Date(desain.tanggal_briefing).toLocaleDateString('id-ID')}</div>
+                              </td>
+                              <td className="p-4 align-middle text-center">
+                                <MediaSlider files={desain.files} />
+                              </td>
+                              <td className="p-4 align-middle text-center">
+                                <div className="flex flex-col items-center space-y-2">
+                                  <MediaSlider files={desain.hasil_desain} canDownload={true} />
+                                  <label className="flex items-center space-x-2 text-gray-400 hover:text-white cursor-pointer mt-2">
+                                    <FiUpload size={16} />
+                                    <span>Upload File</span>
+                                    <input type="file" className="hidden" onChange={(e) => handleUploadHasilDesain(e, desain.id)} />
+                                  </label>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                      </>
                     ))}
-                  </div>
-                )}
-              </div>
-            ))
-          )}
-        </div>
-      )}
+                </>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
