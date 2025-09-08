@@ -1,6 +1,151 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../supabaseClient';
-import { FiSearch, FiDownload, FiUpload } from 'react-icons/fi';
+import { FiSearch, FiDownload, FiUpload, FiTrash, FiChevronLeft, FiChevronRight, FiFile, FiCopy, FiCheck } from 'react-icons/fi';
+
+// Komponen untuk menampilkan media (gambar/video) dalam slider
+function MediaSlider({ files }) {
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  if (!files || files.length === 0) {
+    return <div className="w-24 h-24 flex items-center justify-center bg-gray-800 rounded-md text-gray-500 text-xs">No File</div>;
+  }
+
+  const goToPrevious = (e) => {
+    e.stopPropagation();
+    const isFirstSlide = currentIndex === 0;
+    const newIndex = isFirstSlide ? files.length - 1 : currentIndex - 1;
+    setCurrentIndex(newIndex);
+  };
+
+  const goToNext = (e) => {
+    e.stopPropagation();
+    const isLastSlide = currentIndex === files.length - 1;
+    const newIndex = isLastSlide ? 0 : currentIndex + 1;
+    setCurrentIndex(newIndex);
+  };
+
+  // Helper untuk merender media berdasarkan ekstensi file
+  const renderMedia = (url) => {
+    const fileExtension = url.split('.').pop().toLowerCase().split('?')[0];
+    const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'];
+    const videoExtensions = ['mp4', 'webm', 'ogg'];
+
+    if (imageExtensions.includes(fileExtension)) {
+      return <img src={url} alt="Referensi media" className="w-full h-full object-cover" />;
+    } else if (videoExtensions.includes(fileExtension)) {
+      return <video src={url} muted loop playsInline className="w-full h-full object-cover" />;
+    } else {
+      return <div className="w-full h-full flex items-center justify-center bg-gray-700"><FiFile className="text-gray-400" size={32} /></div>;
+    }
+  };
+
+  return (
+    <div className="relative w-24 h-24 group rounded-md overflow-hidden">
+      {/* Konten Media */}
+      <div className="w-full h-full">
+        {renderMedia(files[currentIndex])}
+      </div>
+
+      {/* Tombol Download Overlay */}
+      <a
+        href={files[currentIndex]}
+        download
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(e) => e.stopPropagation()}
+        className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+        aria-label="Download file"
+      >
+        <FiDownload size={24} className="text-white" />
+      </a>
+
+      {/* Kontrol Slider */}
+      {files.length > 1 && (
+        <>
+          <button
+            onClick={goToPrevious}
+            className="absolute top-1/2 left-1 transform -translate-y-1/2 bg-black/40 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300 hover:bg-black/60"
+            aria-label="Previous file"
+          >
+            <FiChevronLeft size={16} />
+          </button>
+          <button
+            onClick={goToNext}
+            className="absolute top-1/2 right-1 transform -translate-y-1/2 bg-black/40 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300 hover:bg-black/60"
+            aria-label="Next file"
+          >
+            <FiChevronRight size={16} />
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+// Komponen untuk menampilkan briefing dengan fungsionalitas expand/collapse dan copy
+function BriefingCell({ text }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  // Memproses teks untuk pembatasan kata dan baris
+  const { displayText, needsTruncation } = useMemo(() => {
+    if (!text) return { displayText: '', needsTruncation: false };
+
+    const words = text.split(/\s+/);
+    let lines = [];
+    let currentLine = [];
+
+    words.forEach(word => {
+      currentLine.push(word);
+      if (currentLine.length === 7) {
+        lines.push(currentLine.join(' '));
+        currentLine = [];
+      }
+    });
+    if (currentLine.length > 0) {
+      lines.push(currentLine.join(' '));
+    }
+
+    const needsTruncation = lines.length > 4;
+    const truncatedLines = isExpanded ? lines : lines.slice(0, 4);
+    const displayText = truncatedLines.join('\n');
+    
+    return { displayText, needsTruncation };
+  }, [text, isExpanded]);
+
+  // Fungsi untuk menyalin teks ke clipboard
+  const handleCopy = (e) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000); // Reset status copy setelah 2 detik
+  };
+
+  return (
+    <div className="relative group">
+      <p className="text-sm text-gray-300 whitespace-pre-wrap">{displayText}</p>
+      {needsTruncation && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsExpanded(!isExpanded);
+          }}
+          className="text-indigo-400 text-xs font-semibold hover:underline mt-1"
+        >
+          {isExpanded ? 'Lebih sedikit' : 'Lebih banyak'}
+        </button>
+      )}
+      <button
+        onClick={handleCopy}
+        className="absolute top-0 right-0 p-1 bg-gray-700/50 rounded-full text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity hover:text-white"
+        aria-label="Copy briefing"
+      >
+        {copied ? <FiCheck size={14} className="text-green-400" /> : <FiCopy size={14} />}
+      </button>
+    </div>
+  );
+}
+
 
 // Halaman Desain Revisi
 function DesainRevisi() {
@@ -18,7 +163,7 @@ function DesainRevisi() {
       .from('desains')
       .select('*')
       .eq('status', 'revisi') // Filter status hanya untuk 'revisi'
-      .order('created_at', { ascending: false }); // Urutkan dari yang terbaru
+      .order('created_at', { ascending: true }); // Urutkan dari yang terdahulu
 
     if (error) {
       console.error("Error fetching designs:", error.message);
@@ -170,7 +315,10 @@ function DesainRevisi() {
 
     const { error: dbError } = await supabase
       .from('desains')
-      .update({ hasil_desain: updatedHasilDesain })
+      .update({ 
+        hasil_desain: updatedHasilDesain,
+        desain_diupdate: false // Memicu notifikasi update
+      })
       .eq('id', desainId);
 
     if (dbError) {
@@ -178,7 +326,53 @@ function DesainRevisi() {
     } else {
       setDesains(currentDesains =>
         currentDesains.map(d =>
-          d.id === desainId ? { ...d, hasil_desain: updatedHasilDesain } : d
+          d.id === desainId ? { ...d, hasil_desain: updatedHasilDesain, desain_diupdate: false } : d
+        )
+      );
+    }
+  };
+
+  // Fungsi untuk menghapus file hasil desain
+  const handleDeleteHasilDesain = async (desainId, fileUrl) => {
+    // Ekstrak path file dari URL untuk digunakan di Supabase Storage
+    const filePath = fileUrl.split('/hasil_desain/')[1];
+    console.log(`Attempting to delete file: ${filePath}`);
+
+    // Hapus file dari Supabase Storage
+    const { error: storageError } = await supabase.storage
+      .from('hasil_desain')
+      .remove([filePath]);
+
+    if (storageError) {
+      console.error('Error deleting file from storage:', storageError.message);
+      setError('Gagal menghapus file.');
+      return;
+    }
+
+    console.log("File deleted from storage. Now updating database.");
+    
+    // Hapus URL dari array di database
+    const updatedHasilDesain = desains
+      .find(d => d.id === desainId)
+      .hasil_desain.filter(url => url !== fileUrl);
+
+    const { error: dbError } = await supabase
+      .from('desains')
+      .update({ 
+        hasil_desain: updatedHasilDesain,
+        desain_diupdate: false // Memicu notifikasi update
+      })
+      .eq('id', desainId);
+
+    if (dbError) {
+      console.error('Error updating database after file deletion:', dbError.message);
+      setError('Gagal memperbarui database.');
+    } else {
+      console.log("Database updated successfully.");
+      // Perbarui state lokal
+      setDesains(currentDesains =>
+        currentDesains.map(d =>
+          d.id === desainId ? { ...d, hasil_desain: updatedHasilDesain, desain_diupdate: false } : d
         )
       );
     }
@@ -214,89 +408,103 @@ function DesainRevisi() {
           <table className="w-full text-left">
             <thead>
               <tr className="border-b border-white/10">
-                <th className="p-4">No</th>
-                <th className="p-4">Client</th>
-                <th className="p-4">Tanggal</th>
+                <th className="p-4 text-center">No</th>
+                <th className="p-4 text-center">Client</th>
+                <th className="p-4 text-center">Tanggal</th>
                 <th className="p-4">Briefing</th>
-                <th className="p-4">Files</th>
+                <th className="p-4">Reverensi</th>
                 <th className="p-4">Hasil Desain</th>
                 <th className="p-4">Status</th>
               </tr>
             </thead>
             <tbody>
               {desains.length > 0 ? (
-                desains.map((desain, index) => (
-                  <tr 
-                    key={desain.id} 
-                    className={`border-b border-white/10 hover:bg-white/5 transition-colors duration-300 ${!desain.briefing_dilihat ? 'bg-green-500/20' : ''}`}
-                  >
-                    <td className="p-4 align-top">{index + 1}</td>
-                    <td className="p-4 align-top">
-                      <div className="font-semibold">{desain.nama_client}</div>
-                    </td>
-                    <td className="p-4 align-top">
-                      <div className="text-sm text-gray-400">{new Date(desain.tanggal_briefing).toLocaleDateString('id-ID')}</div>
-                    </td>
-                    <td 
-                      className="p-4 align-top max-w-sm"
-                      onDoubleClick={() => handleEditClick(desain)}
+                desains.map((desain, index) => {
+                  const rowClassName = !desain.briefing_dilihat ? 'bg-green-500/20 cursor-pointer' : '';
+
+                  return (
+                    <tr 
+                      key={desain.id} 
+                      className={`border-b border-white/10 hover:bg-white/5 transition-colors duration-300 ${rowClassName}`}
                       onClick={() => !desain.briefing_dilihat && editingId !== desain.id && handleBriefingDilihat(desain.id)}
                     >
-                      {editingId === desain.id ? (
-                        <div className="space-y-2">
-                          <textarea
-                            value={editingText}
-                            onChange={(e) => setEditingText(e.target.value)}
-                            className="w-full p-2 bg-gray-800 rounded-md border border-white/20 focus:outline-none"
-                            rows="4"
-                          />
-                          <div className="flex space-x-2">
-                            <button onClick={() => handleSaveClick(desain.id)} className="px-3 py-1 bg-indigo-600 rounded-md text-sm hover:bg-indigo-700">Simpan</button>
-                            <button onClick={handleCancelClick} className="px-3 py-1 bg-gray-600 rounded-md text-sm hover:bg-gray-700">Batal</button>
-                          </div>
-                        </div>
-                      ) : (
-                        <p className="text-sm text-gray-300 whitespace-pre-wrap cursor-pointer">{desain.briefing}</p>
-                      )}
-                    </td>
-                    <td className="p-4 align-top">
-                      <div className="flex flex-col space-y-2">
-                        {desain.files && desain.files.map((fileUrl, fileIndex) => (
-                          <a key={fileIndex} href={fileUrl} target="_blank" rel="noopener noreferrer" download className="flex items-center space-x-2 text-indigo-400 hover:underline">
-                            <FiDownload size={16} />
-                            <span>{getFileNameFromUrl(fileUrl)}</span>
-                          </a>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="p-4 align-top">
-                      <div className="flex flex-col space-y-2">
-                        {desain.hasil_desain && desain.hasil_desain.map((fileUrl, fileIndex) => (
-                          <a key={fileIndex} href={fileUrl} target="_blank" rel="noopener noreferrer" download className="flex items-center space-x-2 text-green-400 hover:underline">
-                            <FiDownload size={16} />
-                            <span>{getFileNameFromUrl(fileUrl)}</span>
-                          </a>
-                        ))}
-                        <label className="flex items-center space-x-2 text-gray-400 hover:text-white cursor-pointer">
-                          <FiUpload size={16} />
-                          <span>Upload File</span>
-                          <input type="file" className="hidden" onChange={(e) => handleUploadHasilDesain(e, desain.id)} />
-                        </label>
-                      </div>
-                    </td>
-                    <td className="p-4 align-top">
-                      <select
-                        value={desain.status}
-                        onChange={(e) => handleStatusChange(desain.id, e.target.value)}
-                        className="bg-gray-700/50 rounded-lg p-2 border border-transparent focus:border-white/20 focus:outline-none"
+                      <td className="p-4 align-middle text-center">{index + 1}</td>
+                      <td className="p-4 align-middle text-center">
+                        <div className="font-semibold uppercase">{desain.nama_client}</div>
+                      </td>
+                      <td className="p-4 align-middle text-center">
+                        <div className="text-sm text-gray-400">{new Date(desain.tanggal_briefing).toLocaleDateString('id-ID')}</div>
+                      </td>
+                      <td 
+                        className="p-4 align-top max-w-sm"
+                        onDoubleClick={(e) => {
+                          e.stopPropagation();
+                          handleEditClick(desain);
+                        }}
                       >
-                        <option value="revisi">revisi</option>
-                        <option value="proses">proses</option>
-                        <option value="selesai">selesai</option>
-                      </select>
-                    </td>
-                  </tr>
-                ))
+                        {editingId === desain.id ? (
+                          <div 
+                            className="space-y-2"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <textarea
+                              value={editingText}
+                              onChange={(e) => setEditingText(e.target.value)}
+                              className="w-full p-2 bg-gray-800 rounded-md border border-white/20 focus:outline-none"
+                              rows="4"
+                            />
+                            <div className="flex space-x-2">
+                              <button onClick={() => handleSaveClick(desain.id)} className="px-3 py-1 bg-indigo-600 rounded-md text-sm hover:bg-indigo-700">Simpan</button>
+                              <button onClick={handleCancelClick} className="px-3 py-1 bg-gray-600 rounded-md text-sm hover:bg-gray-700">Batal</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <BriefingCell text={desain.briefing} />
+                        )}
+                      </td>
+                      <td className="p-4 align-middle">
+                        <MediaSlider files={desain.files} />
+                      </td>
+                      <td className="p-4 align-top">
+                        <div className="flex flex-col space-y-2">
+                          {desain.hasil_desain && desain.hasil_desain.map((fileUrl, fileIndex) => (
+                            <div key={fileIndex} className="flex items-center justify-between group">
+                              <a href={fileUrl} target="_blank" rel="noopener noreferrer" download className="flex items-center space-x-2 text-green-400 hover:underline">
+                                <FiDownload size={16} />
+                                <span>{getFileNameFromUrl(fileUrl)}</span>
+                              </a>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteHasilDesain(desain.id, fileUrl);
+                                }}
+                                className="ml-2 text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                              >
+                                <FiTrash size={14} />
+                              </button>
+                            </div>
+                          ))}
+                          <label className="flex items-center space-x-2 text-gray-400 hover:text-white cursor-pointer">
+                            <FiUpload size={16} />
+                            <span>Upload File</span>
+                            <input type="file" className="hidden" onChange={(e) => handleUploadHasilDesain(e, desain.id)} />
+                          </label>
+                        </div>
+                      </td>
+                      <td className="p-4 align-middle">
+                        <select
+                          value={desain.status}
+                          onChange={(e) => handleStatusChange(desain.id, e.target.value)}
+                          className="bg-gray-700/50 rounded-lg p-2 border border-transparent focus:border-white/20 focus:outline-none"
+                        >
+                          <option value="revisi">revisi</option>
+                          <option value="proses">proses</option>
+                          <option value="selesai">selesai</option>
+                        </select>
+                      </td>
+                    </tr>
+                  )
+                })
               ) : (
                 <tr>
                   <td colSpan="7" className="text-center p-8 text-gray-400">
